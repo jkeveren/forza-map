@@ -108,7 +108,11 @@ const setAttributes = (target, attributes) => {
 					}
 					index += property.byteLength
 				}
-				console.log(data.PositionX, data.PositionZ);
+				const positionX = data.PositionX || lastPositionX;
+				const positionZ = data.PositionZ || lastPositionZ;
+				if (positionX === 0 && positionZ === 0) {
+					continue;
+				}
 				const mapLength  = 14850;
 				const halfMapLength = mapLength / 2;
 				const PositionXNormalized = ((data.PositionX || lastPositionX) + halfMapLength + 120) / mapLength;
