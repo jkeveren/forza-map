@@ -1,0 +1,4 @@
+{
+	"exec": "node --experimental-modules server.mjs",
+	"ext": "mjs,txt"
+}
