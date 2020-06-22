@@ -110,12 +110,12 @@ f32 CurrentRaceTime;
 u16 LapNumber;
 u8 RacePosition;
 
-u8 Accel;
-u8 Brake;
+u8 Accel; // 315
+u8 Brake; // 316
 u8 Clutch;
-u8 HandBrake;
+u8 HandBrake; // 318
 u8 Gear;
-s8 Steer;
+s8 Steer; // 320
 
 s8 NormalizedDrivingLine;
 s8 NormalizedAIBrakeDifference;
