@@ -64,8 +64,8 @@ func main() {
 				}
 				player = &p
 				players.PushBack(player)
-			} else if buffer[0] == 0 || timestampMS < player.lastTimestampMS {
-				// ignore old data
+			} else if buffer[0] == 0 /* game is paused */ ||
+				timestampMS < player.lastTimestampMS /* data is not latest */ {
 				continue
 			}
 			// Change color based on steer value if
