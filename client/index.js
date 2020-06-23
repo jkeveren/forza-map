@@ -66,7 +66,7 @@ const setAttributes = (target, attributes) => {
 	});
 	const c = canvas.getContext('2d');
 
-	const mapBlob = await (await fetch('/map.jpg')).blob()
+	const mapBlob = await (await fetch('/map.jpg')).blob();
 	const mapBitmap = await createImageBitmap(mapBlob);
 	const mapAspectRatio = mapBitmap.height / mapBitmap.width;
 
@@ -74,33 +74,53 @@ const setAttributes = (target, attributes) => {
 	let minScale = 0;
 	let scale = 1;
 
-	let lastCanvasMeanLength = null;
+	let lastCanvasMeanLength;
 
-	let mapWidth = null;
-	let mapHeight = null;
-	let mapX = null;
-	let mapY = null;
+	let mapWidth;
+	let mapHeight;
+	let mapX;
+	let mapY;
+	let mouseX;
+	let mouseY;
 
-	const setScale = newScale => {
+	const setScale = (newScale, canvasScaleCenterX = canvas.width / 2, canvasScaleCenterY = canvas.height / 2) => {
+		const lastScale = scale;
 		scale = Math.min(maxScale, Math.max(minScale, newScale));
 		mapWidth = mapBitmap.width * scale;
 		mapHeight = mapBitmap.height * scale;
-		mapX = (canvas.width - mapWidth) / 2;
-		mapY = (canvas.height - mapHeight) / 2;
-	}
+		if (mapX === undefined || mapY === undefined) {
+			mapX = (canvas.width - mapWidth) / 2
+			mapY = (canvas.height - mapHeight) / 2;
+		} else {
+			const relativeScale = scale / lastScale;
+			const mapScaleCenterX = canvasScaleCenterX - mapX;
+			mapX -= (mapScaleCenterX * relativeScale) - mapScaleCenterX;
+			const mapScaleCenterY = canvasScaleCenterY - mapY;
+			mapY -= (mapScaleCenterY * relativeScale) - mapScaleCenterY
+		}
+	};
 
-	canvas.addEventListener('wheel', event => setScale(scale * (event.deltaY < 0 ? 1.1 : 0.9)));
+	canvas.addEventListener('wheel', event => {
+		setScale(scale * (event.deltaY < 0 ? 1.1 : 0.9), mouseX, mouseY);
+	});
+	canvas.addEventListener('mousemove', event => {
+		mouseX = event.clientX;
+		mouseY = event.clientY;
+	});
 
 	const resize = () => {
 		canvas.width = innerWidth * devicePixelRatio;
 		canvas.height = innerHeight * devicePixelRatio;
-		// set minScale so map is always touching at least two sides
-		const canvasAspectRatio = canvas.height / canvas.width
-		if (canvasAspectRatio > mapAspectRatio) {
-			minScale = canvas.width / mapBitmap.width;
-		} else {
-			minScale = canvas.height / mapBitmap.height;
+
+		if (mouseX === undefined || mouseY === undefined) {
+			mouseX = canvas.width / 2;
+			mouseY = canvas.height / 2;
 		}
+
+		// set minScale so map is always touching at least two sides
+		const canvasAspectRatio = canvas.height / canvas.width;
+		minScale = canvasAspectRatio > mapAspectRatio ? canvas.width / mapBitmap.width : canvas.height / mapBitmap.height;
+
 		// scale width window resize
 		const canvasMeanLength = (canvas.width + canvas.height) / 2;
 		if (lastCanvasMeanLength) {
