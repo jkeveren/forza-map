@@ -55,13 +55,15 @@ const setAttributes = (target, attributes) => {
 
 // 	const displayWidthHeight = Math.min(innerWidth * devicePixelRatio, innerHeight * devicePixelRatio) + 'px';
 
+	const canvasDefaultCursor = 'grab';
 	const canvas = makeElement({
 		parentElement: document.body,
 		tagName: 'canvas',
 		style: {
 			position: 'fixed',
 			width: '100%',
-			height: '100%'
+			height: '100%',
+			cursor: canvasDefaultCursor
 		}
 	});
 	const c = canvas.getContext('2d');
@@ -74,7 +76,8 @@ const setAttributes = (target, attributes) => {
 	let minScale = 0;
 	let scale = 1;
 
-	let lastCanvasMeanLength;
+	let lastCanvasWidth;
+	let lastCanvasHeight;
 
 	let mapWidth;
 	let mapHeight;
@@ -83,11 +86,15 @@ const setAttributes = (target, attributes) => {
 	let mouseX;
 	let mouseY;
 
+	let dragging = false;
+
 	const setScale = (newScale, canvasScaleCenterX = canvas.width / 2, canvasScaleCenterY = canvas.height / 2) => {
 		const lastScale = scale;
 		scale = Math.min(maxScale, Math.max(minScale, newScale));
+
 		mapWidth = mapBitmap.width * scale;
 		mapHeight = mapBitmap.height * scale;
+
 		if (mapX === undefined || mapY === undefined) {
 			mapX = (canvas.width - mapWidth) / 2
 			mapY = (canvas.height - mapHeight) / 2;
@@ -96,17 +103,36 @@ const setAttributes = (target, attributes) => {
 			const mapScaleCenterX = canvasScaleCenterX - mapX;
 			mapX -= (mapScaleCenterX * relativeScale) - mapScaleCenterX;
 			const mapScaleCenterY = canvasScaleCenterY - mapY;
-			mapY -= (mapScaleCenterY * relativeScale) - mapScaleCenterY
+			mapY -= (mapScaleCenterY * relativeScale) - mapScaleCenterY;
 		}
 	};
 
 	canvas.addEventListener('wheel', event => {
 		setScale(scale * (event.deltaY < 0 ? 1.1 : 0.9), mouseX, mouseY);
 	});
-	canvas.addEventListener('mousemove', event => {
+	canvas.addEventListener('mousedown', event => {
+		if (event.button === 0) {
+			dragging = true;
+			canvas.style.cursor = 'grabbing';
+		}
+	});
+	addEventListener('mousemove', event => {
 		mouseX = event.clientX;
 		mouseY = event.clientY;
+		if (dragging) {
+			mapX += event.movementX;
+			mapY += event.movementY;
+		}
 	});
+	addEventListener('mouseup', event => {
+		if (event.button === 0) {
+			dragging = false;
+			canvas.style.cursor = canvasDefaultCursor;
+		}
+	});
+// 	canvas.addEventListener('mouseout', event => {
+// 		dragging = false;
+// 	});
 
 	const resize = () => {
 		canvas.width = innerWidth * devicePixelRatio;
@@ -121,12 +147,18 @@ const setAttributes = (target, attributes) => {
 		const canvasAspectRatio = canvas.height / canvas.width;
 		minScale = canvasAspectRatio > mapAspectRatio ? canvas.width / mapBitmap.width : canvas.height / mapBitmap.height;
 
-		// scale width window resize
-		const canvasMeanLength = (canvas.width + canvas.height) / 2;
-		if (lastCanvasMeanLength) {
+		// scale and move width window resize
+		if (lastCanvasWidth && lastCanvasHeight) {
+			// scale
+			const canvasMeanLength = (canvas.width + canvas.height) / 2;
+			const lastCanvasMeanLength = (lastCanvasWidth + lastCanvasHeight) / 2;
 			setScale(scale * canvasMeanLength / lastCanvasMeanLength);
+			// and move
+			mapX += (canvas.width - lastCanvasWidth) / 2;
+			mapY += (canvas.height - lastCanvasHeight) / 2;
 		}
-		lastCanvasMeanLength = canvasMeanLength;
+		lastCanvasWidth = canvas.width;
+		lastCanvasHeight = canvas.height;
 	}
 	addEventListener('resize', resize);
 	resize();
