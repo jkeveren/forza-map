@@ -6,18 +6,20 @@ import (
 	"golang.org/x/net/websocket"
 	"log"
 	"math"
+	"math/rand"
 	"net"
 	"net/http"
 	"time"
 )
 
 const UDPMessageLength = 324
+const websocketMessageLength = UDPMessageLength + 1
 const timeIdTolerance = 1000
 
 type Player struct {
 	timeId          int64
 	lastTimestampMS uint32
-	hue             byte
+	hue             byte // between 0 and 254 because Forza Horizon 4 steer value only supports 255 values
 }
 
 func main() {
@@ -26,12 +28,16 @@ func main() {
 
 	// Receive UDP messages from Forza Horizon 4
 	go func() {
-		connection, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IP{127, 0, 0, 1}, Port: 50000})
+		UDPAddr := net.UDPAddr{
+			IP:   net.IP{127, 0, 0, 1},
+			Port: 50000,
+		}
+		connection, err := net.ListenUDP("udp", &UDPAddr)
 		defer connection.Close()
 		if err != nil {
 			log.Panic(err)
 		}
-		buffer := make([]byte, UDPMessageLength)
+		buffer := make([]byte, websocketMessageLength) // buffer is used for receiving UDP and sending websocket messages
 		for {
 			length, _, _ := connection.ReadFromUDP(buffer)
 			if length != UDPMessageLength {
@@ -41,10 +47,10 @@ func main() {
 			unixMS := time.Now().UnixNano() / int64(time.Millisecond)
 			timeId := unixMS - int64(timestampMS)
 			newPlayer := true
-			var player Player
+			var player *Player
 			// Identify or create new player
 			for e := players.Front(); e != nil; e = e.Next() {
-				slicePlayer := e.Value.(Player)
+				slicePlayer := e.Value.(*Player)
 				if slicePlayer.timeId < timeId+timeIdTolerance && slicePlayer.timeId > timeId-timeIdTolerance {
 					player = slicePlayer
 					newPlayer = false
@@ -52,25 +58,29 @@ func main() {
 				}
 			}
 			if newPlayer {
-				player = Player{
+				p := Player{
 					timeId: timeId,
+					hue:    byte(rand.Intn(254)),
 				}
+				player = &p
 				players.PushBack(player)
 			} else if buffer[0] == 0 || timestampMS < player.lastTimestampMS {
 				// ignore old data
 				continue
 			}
+			// Change color based on steer value if
 			if buffer[315] == math.MaxUint8 &&
 				buffer[316] == math.MaxUint8 &&
 				buffer[318] == math.MaxUint8 {
-				steer := buffer[320]
+				steer := buffer[320] // between 129 to 255 for left and 0 to 127 for right. This is not an error.
+				// translate steer to hue by flipping and joining left and right values so hue is 0 to 254
 				if steer > 128 {
-					player.hue = steer - 128
-				} else if steer < 128 {
-					player.hue = steer + 128
+					player.hue = steer - 128 - 1 // subtract 1 to account for the absence of 128 in the possible steer values
+				} else if steer <= 128 {
+					player.hue = steer + 128 - 1
 				}
-				log.Print(steer, player.hue)
 			}
+			buffer[UDPMessageLength-1] = player.hue
 			// Send data to clients
 			for e := clients.Front(); e != nil; e = e.Next() {
 				client := e.Value.(*websocket.Conn)

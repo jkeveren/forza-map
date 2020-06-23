@@ -119,3 +119,7 @@ s8 Steer; // 320
 
 s8 NormalizedDrivingLine;
 s8 NormalizedAIBrakeDifference;
+
+// Custom values
+
+u8 Hue;
