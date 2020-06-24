@@ -72,38 +72,63 @@ const setAttributes = (target, attributes) => {
 	const mapBitmap = await createImageBitmap(mapBlob);
 	const mapAspectRatio = mapBitmap.height / mapBitmap.width;
 
-	const maxScale = 10;
-	let minScale = 0;
+	const scaleMax = 10;
+	let scaleMin = 0;
 	let scale = 1;
 
 	let lastCanvasWidth;
 	let lastCanvasHeight;
+	let canvasAspectRatioIsGreaterThanMapAspectRatio;
 
 	let mapWidth;
 	let mapHeight;
 	let mapX;
+	let mapXMin = -Infinity;
+	let mapXMax = Infinity;
 	let mapY;
+	let mapYMin = -Infinity;
+	let mapYMax = Infinity;
 	let mouseX;
 	let mouseY;
 
 	let dragging = false;
+	let dragStartMapX = null;
+	let dragStartMapY = null;
+	let dragStartMouseX = null;
+	let dragStartMouseY = null;
+
+	const updateMapXYLimits = () => {
+		mapXMax = canvas.width / 2;
+		mapXMin = canvas.width / 2 - mapWidth;
+		mapYMax = canvas.height / 2;
+		mapYMin = canvas.height / 2 - mapHeight;
+	}
+
+	const setMapXY = (x, y) => {
+		mapX = Math.min(mapXMax, Math.max(mapXMin, x));
+		mapY = Math.min(mapYMax, Math.max(mapYMin, y));
+	};
 
 	const setScale = (newScale, canvasScaleCenterX = canvas.width / 2, canvasScaleCenterY = canvas.height / 2) => {
 		const lastScale = scale;
-		scale = Math.min(maxScale, Math.max(minScale, newScale));
+		scale = Math.min(scaleMax, Math.max(scaleMin, newScale));
 
 		mapWidth = mapBitmap.width * scale;
 		mapHeight = mapBitmap.height * scale;
 
+		updateMapXYLimits();
+
 		if (mapX === undefined || mapY === undefined) {
-			mapX = (canvas.width - mapWidth) / 2
+			mapX = (canvas.width - mapWidth) / 2;
 			mapY = (canvas.height - mapHeight) / 2;
 		} else {
 			const relativeScale = scale / lastScale;
 			const mapScaleCenterX = canvasScaleCenterX - mapX;
-			mapX -= (mapScaleCenterX * relativeScale) - mapScaleCenterX;
 			const mapScaleCenterY = canvasScaleCenterY - mapY;
-			mapY -= (mapScaleCenterY * relativeScale) - mapScaleCenterY;
+			setMapXY(
+				mapX - ((mapScaleCenterX * relativeScale) - mapScaleCenterX),
+				mapY - ((mapScaleCenterY * relativeScale) - mapScaleCenterY)
+			)
 		}
 	};
 
@@ -113,6 +138,10 @@ const setAttributes = (target, attributes) => {
 	canvas.addEventListener('mousedown', event => {
 		if (event.button === 0) {
 			dragging = true;
+			dragStartMouseX = mouseX;
+			dragStartMouseY = mouseY;
+			dragStartMapX = mapX;
+			dragStartMapY = mapY;
 			canvas.style.cursor = 'grabbing';
 		}
 	});
@@ -120,8 +149,10 @@ const setAttributes = (target, attributes) => {
 		mouseX = event.clientX;
 		mouseY = event.clientY;
 		if (dragging) {
-			mapX += event.movementX;
-			mapY += event.movementY;
+			setMapXY(
+				dragStartMapX + (mouseX - dragStartMouseX),
+				dragStartMapY + (mouseY - dragStartMouseY)
+			);
 		}
 	});
 	addEventListener('mouseup', event => {
@@ -130,9 +161,6 @@ const setAttributes = (target, attributes) => {
 			canvas.style.cursor = canvasDefaultCursor;
 		}
 	});
-// 	canvas.addEventListener('mouseout', event => {
-// 		dragging = false;
-// 	});
 
 	const resize = () => {
 		canvas.width = innerWidth * devicePixelRatio;
@@ -143,9 +171,8 @@ const setAttributes = (target, attributes) => {
 			mouseY = canvas.height / 2;
 		}
 
-		// set minScale so map is always touching at least two sides
-		const canvasAspectRatio = canvas.height / canvas.width;
-		minScale = canvasAspectRatio > mapAspectRatio ? canvas.width / mapBitmap.width : canvas.height / mapBitmap.height;
+		canvasAspectRatioIsGreaterThanMapAspectRatio = canvas.height / canvas.width > mapAspectRatio;
+		scaleMin = (canvasAspectRatioIsGreaterThanMapAspectRatio ? canvas.width / mapBitmap.width : canvas.height / mapBitmap.height) / 2;
 
 		// scale and move width window resize
 		if (lastCanvasWidth && lastCanvasHeight) {
@@ -153,16 +180,25 @@ const setAttributes = (target, attributes) => {
 			const canvasMeanLength = (canvas.width + canvas.height) / 2;
 			const lastCanvasMeanLength = (lastCanvasWidth + lastCanvasHeight) / 2;
 			setScale(scale * canvasMeanLength / lastCanvasMeanLength);
-			// and move
-			mapX += (canvas.width - lastCanvasWidth) / 2;
-			mapY += (canvas.height - lastCanvasHeight) / 2;
+		} else {
+			setScale(scaleMin * 2);
 		}
+
+		updateMapXYLimits();
+
+		if (lastCanvasWidth && lastCanvasHeight) {
+			// and move
+			setMapXY(
+				mapX + ((canvas.width - lastCanvasWidth) / 2),
+				mapY + ((canvas.height - lastCanvasHeight) / 2)
+			);
+		}
+
 		lastCanvasWidth = canvas.width;
 		lastCanvasHeight = canvas.height;
 	}
 	addEventListener('resize', resize);
 	resize();
-	setScale(minScale);
 
 	let render = () => {
 		c.clearRect(0, 0, canvas.width, canvas.height);
