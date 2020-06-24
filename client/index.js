@@ -174,8 +174,9 @@ const setAttributes = (target, attributes) => {
 		canvasAspectRatioIsGreaterThanMapAspectRatio = canvas.height / canvas.width > mapAspectRatio;
 		scaleMin = (canvasAspectRatioIsGreaterThanMapAspectRatio ? canvas.width / mapBitmap.width : canvas.height / mapBitmap.height) / 2;
 
+		const isLastCanvasWidthHeight = lastCanvasWidth && lastCanvasHeight;
 		// scale and move width window resize
-		if (lastCanvasWidth && lastCanvasHeight) {
+		if (isLastCanvasWidthHeight) {
 			// scale
 			const canvasMeanLength = (canvas.width + canvas.height) / 2;
 			const lastCanvasMeanLength = (lastCanvasWidth + lastCanvasHeight) / 2;
@@ -186,7 +187,7 @@ const setAttributes = (target, attributes) => {
 
 		updateMapXYLimits();
 
-		if (lastCanvasWidth && lastCanvasHeight) {
+		if (isLastCanvasWidthHeight) {
 			// and move
 			setMapXY(
 				mapX + ((canvas.width - lastCanvasWidth) / 2),
