@@ -213,7 +213,10 @@ const setAttributes = (target, attributes) => {
 
 	const webSocketMesageHandler = async event => {
 		// Parse Data
-// 		const dataView = new DataView(await event.data.arrayBuffer());
+		const message = new DataView(await event.data.arrayBuffer());
+		let i = 0;
+		const playerId = message.getUint8(0);
+		console.log(playerId);
 // 		const data = {};
 // 		let index = 0;
 // 		for (const property of format) {

@@ -13,78 +13,121 @@ import (
 )
 
 const UDPMessageLength = 324
-const websocketMessageLength = UDPMessageLength + 1
-const timeIdTolerance = 1000
+const timeIdTolerance = 100
 
 type Player struct {
-	timeId          int64
-	lastTimestampMS uint32
-	hue             byte // between 0 and 254 because Forza Horizon 4 steer value only supports 255 values
+	id                     uint32
+	timeId                 uint64
+	latestMessageUnixMilli uint64
+	lastTimestampMS        uint32
+	hue                    byte // between 0 and 254 because Forza Horizon 4 steer value only supports 255 values
+	expiryTimer            *time.Timer
 }
 
 func main() {
 	players := list.New()
 	clients := list.New()
 
-	// Receive UDP messages from Forza Horizon 4
+	rand.Seed(time.Now().UnixNano())
+
+	// Receive UDP messages from Forza Horizon 4 and send to clients
 	go func() {
 		UDPAddr := net.UDPAddr{
 			IP:   net.IP{127, 0, 0, 1},
 			Port: 50000,
 		}
+
 		connection, err := net.ListenUDP("udp", &UDPAddr)
 		defer connection.Close()
 		if err != nil {
 			log.Panic(err)
 		}
-		buffer := make([]byte, websocketMessageLength) // buffer is used for receiving UDP and sending websocket messages
+
+		UDPMessage := make([]byte, UDPMessageLength)
+		websocketMessage := make([]byte, 25)
+
+		mapValues, i := makeValueMapper(&websocketMessage, &UDPMessage)
+
 		for {
-			length, _, _ := connection.ReadFromUDP(buffer)
-			if length != UDPMessageLength {
+			length, _, err := connection.ReadFromUDP(UDPMessage)
+			if length != UDPMessageLength || err != nil {
 				continue
 			}
-			timestampMS := binary.LittleEndian.Uint32(buffer[4:8])
-			unixMS := time.Now().UnixNano() / int64(time.Millisecond)
-			timeId := unixMS - int64(timestampMS)
-			newPlayer := true
+
+			unixMilli := getUnixMilli()
+			timestampMS := binary.LittleEndian.Uint32(UDPMessage[4:8])
+			timeId := uint64(unixMilli) - uint64(timestampMS)
 			var player *Player
+			var playerElement *list.Element
+
 			// Identify or create new player
+			foundPlayer := false
 			for e := players.Front(); e != nil; e = e.Next() {
 				slicePlayer := e.Value.(*Player)
-				if slicePlayer.timeId < timeId+timeIdTolerance && slicePlayer.timeId > timeId-timeIdTolerance {
+				if slicePlayer.timeId < timeId+timeIdTolerance &&
+					slicePlayer.timeId > timeId-timeIdTolerance {
 					player = slicePlayer
-					newPlayer = false
+					playerElement = e
+					foundPlayer = true
 					break
 				}
 			}
-			if newPlayer {
-				p := Player{
-					timeId: timeId,
-					hue:    byte(rand.Intn(254)),
+			if !foundPlayer {
+				var id uint32
+				for e := players.Front(); e != nil && e.Value.(*Player).id == id; e = e.Next() {
+					id++
 				}
-				player = &p
-				players.PushBack(player)
-			} else if buffer[0] == 0 /* game is paused */ ||
-				timestampMS < player.lastTimestampMS /* data is not latest */ {
+				newPlayer := Player{
+					id:          id,
+					timeId:      timeId,
+					hue:         byte(rand.Intn(254)),
+					expiryTimer: nil,
+				}
+				player = &newPlayer
+				playerElement = players.PushBack(player)
+			} else if timestampMS < player.lastTimestampMS {
+				// ignore out of order messages
 				continue
 			}
-			// Change color based on steer value if
-			if buffer[315] == math.MaxUint8 &&
-				buffer[316] == math.MaxUint8 &&
-				buffer[318] == math.MaxUint8 {
-				steer := buffer[320] // between 129 to 255 for left and 0 to 127 for right. This is not an error.
-				// translate steer to hue by flipping and joining left and right values so hue is 0 to 254
+
+			if player.expiryTimer != nil {
+				player.expiryTimer.Stop()
+			}
+			player.expiryTimer = time.AfterFunc(time.Minute, func() {
+				players.Remove(playerElement)
+			})
+
+			player.latestMessageUnixMilli = unixMilli
+
+			// Change player hue
+			if UDPMessage[315] == math.MaxUint8 /* Accelerator */ &&
+				UDPMessage[316] == math.MaxUint8 /* Brake */ &&
+				UDPMessage[318] == math.MaxUint8 /* Handbrake */ {
+				// translate steer to hue by flipping and joining left and right values so hue is 0 to 254 (not 255 due to absence of 128 in possible steer values).
+				steer := UDPMessage[320]
 				if steer > 128 {
-					player.hue = steer - 128 - 1 // subtract 1 to account for the absence of 128 in the possible steer values
-				} else if steer <= 128 {
-					player.hue = steer + 128 - 1
+					player.hue = steer - 129 // steer is between 129 to 255 for left and 0 to 127 for right. Seems weird but it's correct.
+				} else {
+					player.hue = steer + 127
 				}
 			}
-			buffer[UDPMessageLength-1] = player.hue
+
+			// Map UDPMessage to websocketMessage
+			*i = 0
+			binary.LittleEndian.PutUint32(websocketMessage, player.id) // id
+			*i += 4
+			mapValues(244, 4)                 // positionX
+			mapValues(248, 4)                 // positionY
+			mapValues(252, 4)                 // positionZ
+			mapValues(56, 4)                  // yaw
+			mapValues(256, 4)                 // speed
+			websocketMessage[*i] = player.hue // hue
+			*i++
+
 			// Send data to clients
 			for e := clients.Front(); e != nil; e = e.Next() {
 				client := e.Value.(*websocket.Conn)
-				websocket.Message.Send(client, buffer)
+				websocket.Message.Send(client, websocketMessage)
 			}
 			player.lastTimestampMS = timestampMS
 		}
@@ -107,8 +150,21 @@ func main() {
 
 	// Serve client
 	http.Handle("/", http.FileServer(http.Dir("client")))
-	// http.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
-	// 	fmt.Println("return")
-	// })
 	log.Fatal(http.ListenAndServe(":50000", nil))
+}
+
+func getUnixMilli() uint64 {
+	return uint64(time.Now().UnixNano()) / uint64(time.Millisecond)
+}
+
+func makeValueMapper(target, source *[]byte) (func(int, int), *int) {
+	targetIndex := 0
+	mapValues := func(sourceIndex, length int) {
+		for i := 0; i < length; i++ {
+			(*target)[targetIndex] = (*source)[sourceIndex]
+			targetIndex++
+			sourceIndex++
+		}
+	}
+	return mapValues, &targetIndex
 }
