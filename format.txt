@@ -90,7 +90,7 @@ f32 PositionX; // 244
 f32 PositionY; // 248
 f32 PositionZ; // 252
 
-f32 Speed; // meters per second
+f32 Speed; // 256 // meters per second
 f32 Power; // watts
 f32 Torque; // newton meter
 

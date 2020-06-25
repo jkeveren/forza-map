@@ -1,5 +1,6 @@
 import makeElement from './makeElement.js';
 import assign from './assign.mjs';
+import Player from './player.js';
 
 const setAttributes = (target, attributes) => {
 	for (const attribute of Object.entries(attributes)) {
@@ -26,35 +27,6 @@ const setAttributes = (target, attributes) => {
 		alignItems: 'center'
 	});
 
-// 	// Parse format
-// 	const formatTypes = {
-// 		s32: [4, DataView.prototype.getInt32],
-// 		u32: [4, DataView.prototype.getUint32],
-// 		f32: [4, DataView.prototype.getFloat32],
-// 		u16: [2, DataView.prototype.getUint16],
-// 		u8: [1, DataView.prototype.getUint8],
-// 		s8: [1, DataView.prototype.getInt8],
-// 	};
-
-// 	let format = await (await fetch('/format.txt')).text();
-// 	format = format.toString().split(/\r?\n/);
-// 	format = format.map(line => line.match(/([a-z]\d{1,2}) ([a-zA-Z]+);/));
-// 	format = format.filter(match => match && match[2]);
-// 	format = format.map(match => {
-// 		const type = formatTypes[match[1]];
-// 		const property = {
-// 			key: match[2],
-// 			byteLength: type[0],
-// 			readFunction: type[1]
-// 		};
-// 		if (!property.readFunction) {
-// 			throw new Error('Unknown type ' + match[1]);
-// 		}
-// 		return property;
-// 	});
-
-// 	const displayWidthHeight = Math.min(innerWidth * devicePixelRatio, innerHeight * devicePixelRatio) + 'px';
-
 	const canvasDefaultCursor = 'grab';
 	const canvas = makeElement({
 		parentElement: document.body,
@@ -80,6 +52,10 @@ const setAttributes = (target, attributes) => {
 	let lastCanvasHeight;
 	let canvasAspectRatioIsGreaterThanMapAspectRatio;
 
+	const mapGameWidth = 14825;
+	const mapGameHeight = mapGameWidth;
+	const halfMapGameWidth = mapGameWidth / 2;
+	const halfMapGameHeight = mapGameHeight / 2;
 	let mapWidth;
 	let mapHeight;
 	let mapX;
@@ -96,6 +72,8 @@ const setAttributes = (target, attributes) => {
 	let dragStartMapY = null;
 	let dragStartMouseX = null;
 	let dragStartMouseY = null;
+
+	const players = new Set();
 
 	const updateMapXYLimits = () => {
 		mapXMax = canvas.width / 2;
@@ -204,62 +182,84 @@ const setAttributes = (target, attributes) => {
 	let render = () => {
 		c.clearRect(0, 0, canvas.width, canvas.height);
 		c.drawImage(mapBitmap, mapX, mapY, mapWidth, mapHeight);
+
+		for (const player of players) {
+			if (!player.raceHasBeenOn) {
+				continue;
+			}
+			const x = mapX + player.normalizedX * mapWidth;
+			const y = mapY + (-player.normalizedZ + 1) * mapHeight;
+
+			const canvasScale = 15;
+
+			c.translate(x, y);
+			c.scale(canvasScale, canvasScale);
+			c.rotate(player.yaw);
+
+			c.beginPath();
+			c.moveTo(0, -1);
+			c.lineTo(-0.8, 1);
+			c.lineTo(0, 0.5);
+			c.lineTo(0.8, 1);
+			c.closePath();
+			
+			c.strokeStyle = '#000';
+			c.lineWidth = 0.5;
+			c.lineJoin = 'round';
+			c.stroke();
+			
+			c.fillStyle = player.color;
+			c.fill();
+			
+			c.resetTransform();
+		}
+
 		requestAnimationFrame(render);
 	};
 	requestAnimationFrame(render);
 
-// 	let lastPositionX = 0;
-// 	let lastPositionZ = 0;
-
 	const webSocketMesageHandler = async event => {
-		// Parse Data
 		const message = new DataView(await event.data.arrayBuffer());
+
 		let i = 0;
-		const playerId = message.getUint8(0);
-		console.log(playerId);
-// 		const data = {};
-// 		let index = 0;
-// 		for (const property of format) {
-// 			if (property.key !== 'PADDING') {
-// 				data[property.key] = property.readFunction.apply(dataView, [index, true]);
-// 			}
-// 			index += property.byteLength
-// 		}
+		const id = message.getUint32(i, true);
+		i += 4;
 
-// 		const positionX = data.PositionX || lastPositionX;
-// 		const positionZ = data.PositionZ || lastPositionZ;
-// 		if (positionX === 0 && positionZ === 0) {
-// 			return;
-// 		}
-// 		const mapLength  = 14850;
-// 		const halfMapLength = mapLength / 2;
-// 		const PositionXNormalized = ((data.PositionX || lastPositionX) + halfMapLength + 120) / mapLength;
-// 		const PositionZNormalized = ((data.PositionZ || lastPositionZ) + halfMapLength + 1100) / mapLength;
-// 		const canvasX = PositionXNormalized * canvasLength;
-// 		const canvasY = (-PositionZNormalized + 1) * canvasLength
-// 		if (data.PositionX !== 0 && data.PositionZ !== 0) {
-// 			lastPositionX = data.PositionX;
-// 			lastPositionZ = data.PositionZ;
-// 		}
-// 		c.clearRect(0, 0, c.canvas.width, c.canvas.height);
+		// Identify or create player
+		let player;
+		for (const p of players) {
+			if (p.id === id) {
+				player = p;
+			}
+		}
+		if (!player) {
+			player = new Player(id);
+			players.add(player);
+		}
 
-// 		c.beginPath();
-// 		c.arc(canvasX, canvasY, 60, 0, Math.PI * 180)
-// 		c.lineWidth = 50
-// 		c.strokeStyle = `#000`;
-// 		c.stroke();
-		
-// 		c.beginPath();
-// 		c.arc(canvasX, canvasY, 60, 0, Math.PI * 180)
-// 		c.lineWidth = 20
-// 		c.strokeStyle = `hsl(${data.Hue / 254 * 360}, 100%, 50%)`;
-// 		c.stroke();
-		
-// 		c.beginPath();
-// 		c.arc(canvasX, canvasY, 10, 0, Math.PI * 180)
-// 		c.lineWidth = 20
-// 		c.fillStyle = `#fff`;
-// 		c.fill();
+		player.isRaceOn = message.getInt32(i, true);
+		i += 4;
+		if (!player.isRaceOn) {
+			return;
+		}
+		player.raceHasBeenOn = true
+		const gameX = message.getFloat32(i, true);
+		i += 4;
+		const gameY = message.getFloat32(i, true);
+		player.altitude = gameY - 100;
+		i += 4;
+		const gameZ = message.getFloat32(i, true);
+		i += 4;
+		player.yaw = message.getFloat32(i, true);
+		i += 4;
+		player.speed = message.getFloat32(i, true);
+		i += 4;
+		const hue = message.getUint8(i);
+		player.color = `hsl(${hue / 254 * 360}, 100%, 50%)`;
+		i++;
+
+		player.normalizedX = (gameX + halfMapGameWidth + 115) / mapGameWidth;
+		player.normalizedZ = (gameZ + halfMapGameHeight + 1115) / mapGameHeight;
 	};
 
 	// Connect webSocket and automatically reconnect on close

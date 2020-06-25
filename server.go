@@ -33,7 +33,7 @@ func main() {
 	// Receive UDP messages from Forza Horizon 4 and send to clients
 	go func() {
 		UDPAddr := net.UDPAddr{
-			IP:   net.IP{127, 0, 0, 1},
+			// IP:   net.IP{127, 0, 0, 1},
 			Port: 50000,
 		}
 
@@ -44,7 +44,7 @@ func main() {
 		}
 
 		UDPMessage := make([]byte, UDPMessageLength)
-		websocketMessage := make([]byte, 25)
+		websocketMessage := make([]byte, 29)
 
 		mapValues, i := makeValueMapper(&websocketMessage, &UDPMessage)
 
@@ -60,7 +60,7 @@ func main() {
 			var player *Player
 			var playerElement *list.Element
 
-			// Identify or create new player
+			// Identify or create player
 			foundPlayer := false
 			for e := players.Front(); e != nil; e = e.Next() {
 				slicePlayer := e.Value.(*Player)
@@ -93,7 +93,7 @@ func main() {
 			if player.expiryTimer != nil {
 				player.expiryTimer.Stop()
 			}
-			player.expiryTimer = time.AfterFunc(time.Minute, func() {
+			player.expiryTimer = time.AfterFunc(5*time.Second, func() {
 				players.Remove(playerElement)
 			})
 
@@ -116,6 +116,7 @@ func main() {
 			*i = 0
 			binary.LittleEndian.PutUint32(websocketMessage, player.id) // id
 			*i += 4
+			mapValues(0, 4)                   // IsRaceOn
 			mapValues(244, 4)                 // positionX
 			mapValues(248, 4)                 // positionY
 			mapValues(252, 4)                 // positionZ
