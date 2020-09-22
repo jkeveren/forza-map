@@ -1,4 +1,4 @@
-module github.com/jkeveren/forza-horizon-4-data-readout
+module github.com/jkeveren/forza-map
 
 go 1.14
 
