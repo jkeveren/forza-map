@@ -3,12 +3,14 @@ package main
 import (
 	"container/list"
 	"encoding/binary"
+	"fmt"
 	"golang.org/x/net/websocket"
-	"log"
 	"math"
 	"math/rand"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 )
 
@@ -30,18 +32,27 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
+	portString := os.Getenv("PORT")
+	if portString == "" {
+		portString = "42069"
+	}
+
+	port, err := strconv.Atoi(portString)
+	if err != nil {
+		fmt.Println("PORT environment variable is not a number")
+		os.Exit(1)
+	}
+
 	// Receive UDP messages from Forza Horizon 4 and send to clients
 	go func() {
-		UDPAddr := net.UDPAddr{
-			// IP:   net.IP{127, 0, 0, 1},
-			Port: 50000,
-		}
+		UDPAddr := net.UDPAddr{Port: port}
 
 		connection, err := net.ListenUDP("udp", &UDPAddr)
 		defer connection.Close()
 		if err != nil {
-			log.Panic(err)
+			panic(err)
 		}
+		fmt.Println("Listening for UDP on port " + portString)
 
 		UDPMessage := make([]byte, UDPMessageLength)
 		websocketMessage := make([]byte, 29)
@@ -150,8 +161,9 @@ func main() {
 	}))
 
 	// Serve client
-	http.Handle("/", http.FileServer(http.Dir("client")))
-	log.Fatal(http.ListenAndServe(":50000", nil))
+	http.Handle("/", http.FileServer(http.Dir("./client")))
+	fmt.Println("Starting HTTP server on port " + portString)
+	panic(http.ListenAndServe(":"+portString, nil))
 }
 
 func getUnixMilli() uint64 {
