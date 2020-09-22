@@ -1,6 +1,6 @@
 import makeElement from './makeElement.js';
 import assign from './assign.mjs';
-import Player from './player.js';
+import Player from './Player.js';
 
 const setAttributes = (target, attributes) => {
 	for (const attribute of Object.entries(attributes)) {
@@ -202,15 +202,15 @@ const setAttributes = (target, attributes) => {
 			c.lineTo(0, 0.5);
 			c.lineTo(0.8, 1);
 			c.closePath();
-			
+
 			c.strokeStyle = '#000';
 			c.lineWidth = 0.5;
 			c.lineJoin = 'round';
 			c.stroke();
-			
+
 			c.fillStyle = player.color;
 			c.fill();
-			
+
 			c.resetTransform();
 		}
 
