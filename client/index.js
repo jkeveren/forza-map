@@ -264,7 +264,7 @@ const setAttributes = (target, attributes) => {
 
 	// Connect webSocket and automatically reconnect on close
 	const webSocketURL = new URL(location.origin);
-	webSocketURL.protocol = 'ws';
+	webSocketURL.protocol = webSocketURL.protocol.replace('http', 'ws'); // makes TLS optional
 	webSocketURL.pathname = 'data';
 	while (true) {
 		const webSocket = new WebSocket(webSocketURL);
